@@ -6,6 +6,7 @@ import "@openzeppelin/contracts@4.6.0/access/Ownable.sol";
 import "@openzeppelin/contracts@4.6.0/utils/Counters.sol";
 import "@openzeppelin/contracts@4.6.0/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts@4.6.0/security/Pausable.sol";
+import "@openzeppelin/contracts@4.6.0/interfaces/IERC2981.sol";
 
 contract ForTheCulture is ERC721, Ownable, Pausable {
 
@@ -16,10 +17,10 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
   mapping (address => uint) nftCounts;
 
   bytes32 merkleRoot = 0x02d2116e529b013a2a97c380516706c46e0bf071f96cae1702ec5f41034a4d4b;
-  
+
   string public uriPrefix = "https://nftftc.s3.eu-west-1.amazonaws.com/test_metadata/";
   string public uriSuffix = ".json";
-  
+
   uint256 constant fee = 0.01 ether;
   uint256 constant maxSupply = 6969;
 
@@ -29,12 +30,15 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
 
   bool public isWhitelistMintActive = false;
 
+  address public royaltiesPayoutAddress = 0x0;
+  uint256 public royaltiesPercent = 1000; // out of 10000 = 10%
+
   event Received(address, uint);
 
   receive() external payable {
     emit Received(msg.sender, msg.value);
   }
-  
+
   constructor() ERC721("For the Culture", "FTC") {}
 
   modifier onlyOrigin () {
@@ -51,9 +55,9 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
   }
 
   function whitelistMint(bytes32[] calldata proof) external payable onlyOrigin {
-    
+
     uint256 balance = address(this).balance;
-    
+
     require(isWhitelistMintActive, "Whitelist mint is not active!");
     require(balance >= fee, "Insufficient funds!");
     require(nftCounts[msg.sender] + mintAmount <= maxMintAmountPerWallet, "Exceeds mint amount per wallet!");
@@ -65,11 +69,11 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
     supply.increment();
     _safeMint(msg.sender, supply.current());
   }
-  
+
   function ownerMint(uint256 _mintAmount, address _receiver) external onlyOwner {
 
     require(supply.current() + _mintAmount <= maxSupply, "Max supply exceeded!");
-    
+
     for (uint256 i = 0; i < _mintAmount; i++) {
       supply.increment();
       _safeMint(_receiver, supply.current());
@@ -112,7 +116,7 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
   function withdrawAll() external onlyOwner {
     uint256 balance = address(this).balance;
     require(balance > 0);
-      
+
     _withdraw(owner(), address(this).balance);
   }
 
@@ -123,5 +127,21 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
 
   function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal whenNotPaused override {
     super._beforeTokenTransfer(from, to, tokenId);
-  } 
+  }
+
+  function royaltyInfo(uint256 tokenId, uint256 salePrice) external view returns (address receiver, uint256 royaltyAmount) {
+    require(_exists(tokenId), "Non-existent token given!");
+    require(salePrice > 0, "Sale price must be greater than 0!");
+    return (royaltiesPayoutAddress, (salePrice * royaltiesPercent) / 10000);
+  }
+
+  function setRoyaltiesPercent(uint256 _royalitesPercent) external onlyOwner {
+    require(_royalitesPercent > 0, "Royalties percent must be greater than 0!");
+    require(_royalitesPercent <= 10000, "Royalties percent must be less than or equal to 10000!");
+    royaltiesPercent = _royalitesPercent;
+  }
+
+  function supportsInterface(bytes4 interfaceId) public view virtual override (ERC721, IERC165) returns (bool) {
+      return (interfaceId == type(IERC2981).interfaceId || super.supportsInterface(interfaceId));
+  }
 }
