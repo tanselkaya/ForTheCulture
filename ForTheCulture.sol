@@ -30,7 +30,7 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
 
   bool public isWhitelistMintActive = false;
 
-  address public royaltiesPayoutAddress = 0x0;
+  address constant public royaltiesPayoutAddress = 0xfb4f09CEfD99b2e27dfB381ae7cA07D4551e7b3A;
   uint256 public royaltiesPercent = 1000; // out of 10000 = 10%
 
   event Received(address, uint);
@@ -141,7 +141,7 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
     royaltiesPercent = _royalitesPercent;
   }
 
-  function supportsInterface(bytes4 interfaceId) public view virtual override (ERC721, IERC165) returns (bool) {
+  function supportsInterface(bytes4 interfaceId) public view virtual override (ERC721) returns (bool) {
       return (interfaceId == type(IERC2981).interfaceId || super.supportsInterface(interfaceId));
   }
 }
