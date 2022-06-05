@@ -15,7 +15,7 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
   Counters.Counter private supply;
   mapping (address => uint) nftCounts;
 
-  bytes32 constant merkleRoot = 0x02d2116e529b013a2a97c380516706c46e0bf071f96cae1702ec5f41034a4d4b;
+  bytes32 merkleRoot = 0x02d2116e529b013a2a97c380516706c46e0bf071f96cae1702ec5f41034a4d4b;
   
   string public uriPrefix = "https://nftftc.s3.eu-west-1.amazonaws.com/test_metadata/";
   string public uriSuffix = ".json";
@@ -28,17 +28,17 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
   uint256 constant maxMintAmountPerWallet = 1;
 
   bool public isWhitelistMintActive = false;
+
+  event Received(address, uint);
+
+  receive() external payable {
+    emit Received(msg.sender, msg.value);
+  }
   
   constructor() ERC721("For the Culture", "FTC") {}
 
   modifier onlyOrigin () {
     require(msg.sender == tx.origin, "Contract calls are not allowed");
-    _;
-  }
-
-  modifier mintCompliance(uint256 _mintAmount) {
-    require(_mintAmount > 0 && _mintAmount <= maxMintAmountPerTx, "Invalid mint amount!");
-    require(supply.current() + _mintAmount <= maxSupply, "Max supply exceeded!");
     _;
   }
 
@@ -50,13 +50,14 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
         _unpause();
   }
 
-  function whitelistMint(bytes32[] calldata proof) external payable mintCompliance(mintAmount) onlyOrigin {
+  function whitelistMint(bytes32[] calldata proof) external payable onlyOrigin {
     
     uint256 balance = address(this).balance;
     
     require(isWhitelistMintActive, "Whitelist mint is not active!");
     require(balance >= fee, "Insufficient funds!");
     require(nftCounts[msg.sender] + mintAmount <= maxMintAmountPerWallet, "Exceeds mint amount per wallet!");
+    require(supply.current() + mintAmount <= maxSupply, "Max supply exceeded!");
     require(MerkleProof.verify(proof, merkleRoot, keccak256(abi.encodePacked(msg.sender))), "You are not whitelisted!");
 
     _withdraw(payable(msg.sender), fee);
@@ -65,10 +66,13 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
     _safeMint(msg.sender, supply.current());
   }
   
-  function ownerMint(uint256 _mintAmount) external onlyOwner {
+  function ownerMint(uint256 _mintAmount, address _receiver) external onlyOwner {
+
+    require(supply.current() + _mintAmount <= maxSupply, "Max supply exceeded!");
+    
     for (uint256 i = 0; i < _mintAmount; i++) {
       supply.increment();
-      _safeMint(owner(), supply.current());
+      _safeMint(_receiver, supply.current());
     }
   }
 
@@ -101,6 +105,10 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
     isWhitelistMintActive = _state;
   }
 
+  function setMerkleRoot(bytes32 _root) external onlyOwner {
+    merkleRoot = _root;
+  }
+
   function withdrawAll() external onlyOwner {
     uint256 balance = address(this).balance;
     require(balance > 0);
@@ -113,11 +121,7 @@ contract ForTheCulture is ERC721, Ownable, Pausable {
     require(success, "Transfer failed.");
   }
 
-  function _beforeTokenTransfer(address from, address to, uint256 tokenId)
-  internal
-  whenNotPaused
-  override
-  {
+  function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal whenNotPaused override {
     super._beforeTokenTransfer(from, to, tokenId);
-  }
+  } 
 }
